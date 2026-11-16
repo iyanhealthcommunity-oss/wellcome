@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>IHC Portal Klien — Iyan Health Community</title>
+  <link rel="icon" type="image/png" href="./assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Toast Notifikasi -->
+  <div id="top-toast-region" class="top-toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Splash Screen with Pulsing IHC Logo -->
+  <div id="splash-screen" class="splash-overlay">
+    <div class="ihc-loading-box">
+      <img src="./assets/ihc-logo.png" alt="Logo IHC" class="ihc-logo ihc-pulse" />
+      <p class="loading-text">Memuat IHC Portal Klien…</p>
+    </div>
+  </div>
+
+  <!-- Global Loading Overlay -->
+  <div id="global-loading" class="loading-overlay hidden">
+    <div class="ihc-loading-box card">
+      <img src="./assets/ihc-logo.png" alt="Logo IHC" class="ihc-logo ihc-pulse" />
+      <p id="global-loading-text" class="loading-text">Memproses data…</p>
+    </div>
+  </div>
+
+  <!-- Auth View -->
+  <main id="auth-view" class="auth-page hidden">
+    <section class="auth-container">
+      <div class="auth-brand">
+        <img src="./assets/ihc-logo.png" alt="Logo IHC Iyan Health Community" class="ihc-logo-lg" />
+        <h1>IHC Portal Klien</h1>
+        <p class="muted">Iyan Health Community • Zona Waktu WIB (Asia/Jakarta)</p>
+      </div>
+
+      <div id="config-warning" class="alert alert-warn hidden">
+        <strong>Konfigurasi Firebase belum diisi.</strong> Lengkapi <code>firebase-config.js</code> dengan kredensial proyek Firebase Anda dan aktifkan Authentication Email/Password.
+      </div>
+
+      <div class="card auth-card">
+        <div class="tab-bar" role="tablist">
+          <button type="button" class="tab-btn active" data-auth-tab="login">Masuk</button>
+          <button type="button" class="tab-btn" data-auth-tab="register">Buat Password</button>
+          <button type="button" class="tab-btn" data-auth-tab="reset">Reset Password</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="form-login" class="auth-form">
+          <label>
+            Email Terdaftar
+            <input type="email" id="login-email" required placeholder="nama@email.com" autocomplete="email" />
+          </label>
+          <label>
+            Password
+            <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password" />
+          </label>
+          <button type="submit" class="btn btn-primary full-width">Masuk ke Portal</button>
+        </form>
+
+        <!-- Register / Create Password Form -->
+        <form id="form-register" class="auth-form hidden">
+          <p class="helper-text">Hanya email yang sudah didaftarkan oleh Coach Iyan yang dapat membuat password.</p>
+          <label>
+            Email yang Didaftarkan Coach
+            <input type="email" id="reg-email" required placeholder="nama@email.com" autocomplete="email" />
+          </label>
+          <label>
+            Buat Password Baru (min. 6 karakter)
+            <input type="password" id="reg-password" required minlength="6" placeholder="Minimal 6 karakter" autocomplete="new-password" />
+          </label>
+          <button type="submit" class="btn btn-primary full-width">Buat Password &amp; Masuk</button>
+        </form>
+
+        <!-- Reset Password Form -->
+        <form id="form-reset" class="auth-form hidden">
+          <p class="helper-text">Link atur ulang password akan dikirim ke email Anda.</p>
+          <label>
+            Email Terdaftar
+            <input type="email" id="reset-email" required placeholder="nama@email.com" autocomplete="email" />
+          </label>
+          <button type="submit" class="btn btn-primary full-width">Kirim Link Reset Password</button>
+        </form>
+
+        <p id="auth-message" class="auth-feedback hidden"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Authenticated Client Portal Shell -->
+  <div id="portal-view" class="portal-shell hidden">
+    <!-- Left Sidebar for Desktop/Laptop -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">
+          <img src="./assets/ihc-logo.png" alt="Logo IHC" class="ihc-logo-sm" />
+          <div>
+            <strong>IHC Portal</strong>
+            <small id="sidebar-client-name">Klien</small>
+          </div>
+        </div>
+        <nav class="nav-list" aria-label="Menu Portal Klien">
+          <button type="button" class="nav-item active" data-menu="profile">Data Diri</button>
+          <button type="button" class="nav-item" data-menu="schedule">Jadwal</button>
+          <button type="button" class="nav-item" data-menu="progress">Progress Statistik</button>
+          <button type="button" class="nav-item" data-menu="photos">Foto Progres</button>
+          <button type="button" class="nav-item" data-menu="workout">Gerakan Olahraga</button>
+        </nav>
+      </div>
+      <div class="sidebar-footer">
+        <button type="button" id="logout-btn" class="btn btn-outline full-width">Keluar Akun</button>
+      </div>
+    </aside>
+
+    <div class="portal-content-wrap">
+      <!-- Standard Top Mobile Header -->
+      <header class="mobile-header">
+        <div class="header-left">
+          <img src="./assets/ihc-logo.png" alt="Logo IHC" class="ihc-logo-sm" />
+          <div>
+            <strong id="mobile-header-title">Data Diri</strong>
+            <small id="mobile-client-badge" class="muted">WIB</small>
+          </div>
+        </div>
+        <button type="button" id="mobile-logout-btn" class="btn btn-outline btn-sm">Keluar</button>
+      </header>
+
+      <main class="main-panel">
+        <!-- 1. Data Diri -->
+        <section id="section-profile" class="menu-section"></section>
+
+        <!-- 2. Jadwal -->
+        <section id="section-schedule" class="menu-section hidden"></section>
+
+        <!-- 3. Progress Statistik -->
+        <section id="section-progress" class="menu-section hidden"></section>
+
+        <!-- 4. Foto Progres -->
+        <section id="section-photos" class="menu-section hidden"></section>
+
+        <!-- 5. Gerakan Olahraga -->
+        <section id="section-workout" class="menu-section hidden"></section>
+      </main>
+
+      <!-- Standard Full-Width Bottom Navigation on Mobile -->
+      <nav class="bottom-nav" aria-label="Navigasi Bawah">
+        <button type="button" class="bottom-item active" data-menu="profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12Zm0 2.25c-4.14 0-7.5 2.02-7.5 4.5V20h15v-1.25c0-2.48-3.36-4.5-7.5-4.5Z"/></svg>
+          <span>Profil</span>
+        </button>
+        <button type="button" class="bottom-item" data-menu="schedule">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7Zm12 7H5v10h14V9Z"/></svg>
+          <span>Jadwal</span>
+        </button>
+        <button type="button" class="bottom-item" data-menu="progress">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16v2H2V3h2v16Zm3-4 4-4 3 3 5-6 1.5 1.3-6.4 7.7-3.1-3.1-2.6 2.6L7 15Z"/></svg>
+          <span>Statistik</span>
+        </button>
+        <button type="button" class="bottom-item" data-menu="photos">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h4l1.5-2h5L16 5h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm8 3.5A4.5 4.5 0 1 0 16.5 13 4.5 4.5 0 0 0 12 8.5Z"/></svg>
+          <span>Foto</span>
+        </button>
+        <button type="button" class="bottom-item" data-menu="workout">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 10.5V8H18v2.5h-2V7h-2v10h2v-3.5h2V16h2.5v-2.5H22v-3h-1.5ZM6 10.5V8H3.5v2.5H2v3h1.5V16H6v-2.5h2V17h2V7H8v3.5H6Zm5 .5h2v2h-2v-2Z"/></svg>
+          <span>Workout</span>
+        </button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Photo Zoom Modal -->
+  <div id="photo-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong id="photo-modal-title">Foto Progres</strong>
+        <button type="button" id="photo-modal-close" class="btn btn-outline btn-sm">Tutup</button>
+      </div>
+      <img id="photo-modal-img" alt="Perbesar foto progres" />
+      <p id="photo-modal-meta" class="muted"></p>
+    </div>
+  </div>
+
+  <!-- Reschedule Request Modal -->
+  <div id="reschedule-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong>Minta Reschedule Jadwal</strong>
+        <button type="button" id="reschedule-modal-close" class="btn btn-outline btn-sm">Tutup</button>
+      </div>
+      <form id="reschedule-form" class="auth-form">
+        <input type="hidden" id="reschedule-session-id" />
+        <input type="hidden" id="reschedule-orig-start" />
+        <p id="reschedule-session-summary" class="helper-text"></p>
+        <label>
+          Tanggal Baru (WIB)
+          <input type="date" id="reschedule-date" required />
+        </label>
+        <label>
+          Jam Baru (WIB)
+          <input type="time" id="reschedule-time" required value="07:00" />
+        </label>
+        <label>
+          Alasan Reschedule
+          <textarea id="reschedule-reason" rows="3" required placeholder="Tuliskan alasan singkat…"></textarea>
+        </label>
+        <button type="submit" class="btn btn-primary full-width">Kirim Permintaan Reschedule</button>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
