@@ -615,6 +615,25 @@ select:focus {
 .badge-DISETUJUI, .badge-HADIR { background: var(--emerald-soft); color: var(--emerald-ink); }
 .badge-DITOLAK, .badge-TIDAK_HADIR, .badge-DIBATALKAN { background: var(--danger-soft); color: var(--danger-ink); }
 .badge-TERJADWAL, .badge-DIBALAS { background: var(--info-soft); color: var(--info-ink); }
+.badge-RESCHEDULED { background: var(--neutral-soft); color: var(--neutral-ink); }
+
+.slot-privacy-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--emerald-soft);
+  color: var(--emerald-ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.slot-privacy-pill.group {
+  background: var(--info-soft);
+  color: var(--info-ink);
+}
 
 .photo-grid {
   display: grid;

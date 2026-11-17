@@ -83,7 +83,8 @@ const SESSION_STATUS_LABELS = {
   TERJADWAL: "Terjadwal",
   HADIR: "Hadir",
   TIDAK_HADIR: "Tidak Hadir",
-  DIBATALKAN: "Dibatalkan"
+  DIBATALKAN: "Dibatalkan",
+  RESCHEDULED: "Dijadwalkan Ulang"
 };
 
 const REQUEST_STATUS_LABELS = {
@@ -104,8 +105,12 @@ const state = {
   bodyCompositions: [],
   photos: [],
   workouts: [],
+  programAssignments: [],
   workoutRequests: [],
   mealPlanNotes: [],
+  nearestSlotDocId: null,
+  nearestSlotSummary: null,
+  slotSummaryUnsub: null,
   photoFilter: "ALL",
   selectedCalendarMonth: new Date(),
   selectedCalendarDayKey: toWibDayKey(Date.now()),
@@ -268,6 +273,116 @@ function clearSubscriptions() {
     try { u(); } catch (_) {}
   });
   state.unsubscribers = [];
+  if (state.slotSummaryUnsub) {
+    try { state.slotSummaryUnsub(); } catch (_) {}
+    state.slotSummaryUnsub = null;
+  }
+  state.nearestSlotDocId = null;
+  state.nearestSlotSummary = null;
+}
+
+function getNearestUpcomingSession() {
+  const now = Date.now();
+  return state.sessions
+    .filter((s) => s.status === "TERJADWAL" && typeof s.endAtMillis === "number" && s.endAtMillis >= now)
+    .sort((a, b) => a.startAtMillis - b.startAtMillis)[0] || null;
+}
+
+function syncNearestSlotSummarySubscription() {
+  const nearest = getNearestUpcomingSession();
+  if (!nearest || !state.db || !nearest.coachUid) {
+    if (state.slotSummaryUnsub) {
+      try { state.slotSummaryUnsub(); } catch (_) {}
+      state.slotSummaryUnsub = null;
+    }
+    state.nearestSlotDocId = null;
+    state.nearestSlotSummary = null;
+    return;
+  }
+  const slotKey = nearest.slotKey || `${nearest.startAtMillis}_${nearest.endAtMillis}`;
+  const slotDocId = `${nearest.coachUid}_${slotKey}`;
+  if (state.nearestSlotDocId === slotDocId && state.slotSummaryUnsub) return;
+
+  if (state.slotSummaryUnsub) {
+    try { state.slotSummaryUnsub(); } catch (_) {}
+    state.slotSummaryUnsub = null;
+  }
+  state.nearestSlotDocId = slotDocId;
+  state.nearestSlotSummary = null;
+
+  state.slotSummaryUnsub = onSnapshot(
+    doc(state.db, "sessionSlotSummaries", slotDocId),
+    (snap) => {
+      state.nearestSlotSummary = snap.exists() ? snap.data() : null;
+      renderProfileSection();
+    },
+    () => {
+      state.nearestSlotSummary = null;
+      renderProfileSection();
+    }
+  );
+}
+
+function parseSnapshotExercises(jsonStr) {
+  if (!jsonStr || typeof jsonStr !== "string") return [];
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item.exerciseName === "string" && item.exerciseName.trim())
+      .slice()
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  } catch (_) {
+    return [];
+  }
+}
+
+function resolveActiveCustomProgram() {
+  const todayKey = toWibDayKey(Date.now());
+  const todaySession = state.sessions
+    .filter((s) => toWibDayKey(s.startAtMillis) === todayKey && (s.status === "TERJADWAL" || s.status === "HADIR"))
+    .sort((a, b) => a.startAtMillis - b.startAtMillis)
+    .find((s) => parseSnapshotExercises(s.programSnapshotJson).length > 0);
+  if (todaySession) {
+    return {
+      programName: todaySession.assignedProgramName || "Program Sesi Hari Ini",
+      sourceLabel: `Sesi ${formatWibDate(todaySession.startAtMillis)}`,
+      exercises: parseSnapshotExercises(todaySession.programSnapshotJson)
+    };
+  }
+
+  const nearest = getNearestUpcomingSession();
+  if (nearest && parseSnapshotExercises(nearest.programSnapshotJson).length > 0) {
+    return {
+      programName: nearest.assignedProgramName || "Program Sesi Terdekat",
+      sourceLabel: `Sesi ${formatWibDate(nearest.startAtMillis)}`,
+      exercises: parseSnapshotExercises(nearest.programSnapshotJson)
+    };
+  }
+
+  const dateAssign = state.programAssignments.find(
+    (a) => a.dateKeyWib === todayKey && parseSnapshotExercises(a.exercisesSnapshotJson).length > 0
+  );
+  if (dateAssign) {
+    return {
+      programName: dateAssign.programName || "Program Hari Ini",
+      sourceLabel: `Jadwal ${todayKey}`,
+      exercises: parseSnapshotExercises(dateAssign.exercisesSnapshotJson)
+    };
+  }
+
+  const defaultAssign = state.programAssignments.find(
+    (a) => a.dateKeyWib === "DEFAULT" && parseSnapshotExercises(a.exercisesSnapshotJson).length > 0
+  );
+  if (defaultAssign) {
+    return {
+      programName: defaultAssign.programName || "Program Latihan Utama",
+      sourceLabel: "Program Default",
+      exercises: parseSnapshotExercises(defaultAssign.exercisesSnapshotJson)
+    };
+  }
+
+  return null;
 }
 
 function initTabs() {
@@ -350,6 +465,46 @@ function renderProfileSection() {
   const attendedCount = state.sessions.filter((s) => s.status === "HADIR").length;
   const quota = c.totalSessionsQuota || 4;
   const statusLabel = CLIENT_STATUS_LABELS[c.status] || c.status || "Aktif";
+  const nearest = getNearestUpcomingSession();
+
+  let nearestCardHtml = `
+    <div class="card">
+      <h3 style="margin-top:0;margin-bottom:6px;">Sesi Terdekat</h3>
+      <p class="muted" style="margin:0;">Belum ada jadwal sesi mendatang. Lihat tab Jadwal atau hubungi Coach Iyan.</p>
+    </div>
+  `;
+  if (nearest) {
+    const tier = c.packageTier || "BASIC";
+    const summary = state.nearestSlotSummary;
+    const pCount = summary && typeof summary.participantCount === "number" ? summary.participantCount : null;
+    let slotPrivacyLabel = "Menghitung info sesi…";
+    let isGroupPill = false;
+    if (tier === "PREMIUM" || summary?.isOneOnOne === true) {
+      slotPrivacyLabel = "Sesi 1 on 1";
+    } else if (pCount !== null && pCount > 1) {
+      slotPrivacyLabel = `Kamu berlatih bersama ${pCount - 1} klien lain`;
+      isGroupPill = true;
+    } else if (pCount === 1) {
+      slotPrivacyLabel = "Kamu berlatih sendiri di slot ini";
+    } else {
+      slotPrivacyLabel = "Sesi Terjadwal";
+    }
+    nearestCardHtml = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Sesi Terdekat</h3>
+          <span class="badge badge-${nearest.status}">${SESSION_STATUS_LABELS[nearest.status] || nearest.status}</span>
+        </div>
+        <div style="margin-top:8px;">
+          <strong>${escapeHtml(nearest.title || "Sesi Latihan")}</strong>
+          <div class="muted">${formatWibDate(nearest.startAtMillis)} • ${formatWibTime(nearest.startAtMillis)} - ${formatWibTime(nearest.endAtMillis)}</div>
+          <div class="muted">Lokasi: ${escapeHtml(nearest.location || "IHC Studio")}</div>
+          ${nearest.assignedProgramName ? `<div class="muted">Program: <strong>${escapeHtml(nearest.assignedProgramName)}</strong></div>` : ""}
+        </div>
+        <div class="slot-privacy-pill ${isGroupPill ? "group" : ""}">${escapeHtml(slotPrivacyLabel)}</div>
+      </div>
+    `;
+  }
 
   container.innerHTML = `
     <div class="card">
@@ -368,6 +523,7 @@ function renderProfileSection() {
         <div><strong>Tujuan</strong><div class="muted">${escapeHtml(c.goal || "-")}</div></div>
       </div>
     </div>
+    ${nearestCardHtml}
     <div class="card">
       <h3 style="margin-top:0;">Ringkasan Fasilitas Paket ${fac.label}</h3>
       <ul style="margin:0;padding-left:18px;color:var(--muted);font-size:0.9rem;">
@@ -627,8 +783,30 @@ function renderWorkoutSection() {
   const mins = String(Math.floor(state.timerRemaining / 60)).padStart(2, "0");
   const secs = String(state.timerRemaining % 60).padStart(2, "0");
 
+  const activeCustom = resolveActiveCustomProgram();
+  const customHtml = activeCustom
+    ? `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+          <h3 style="margin:0;">${escapeHtml(activeCustom.programName)}</h3>
+          <span class="badge badge-HADIR">${escapeHtml(activeCustom.sourceLabel)}</span>
+        </div>
+        ${activeCustom.exercises.map((ex, idx) => `
+          <div class="list-item-row">
+            <div>
+              <strong>${idx + 1}. ${escapeHtml(ex.exerciseName)}</strong>
+              <div class="muted">${ex.sets} set × ${escapeHtml(ex.reps)} • Istirahat ${ex.restSeconds}d</div>
+              ${ex.notes ? `<div class="muted">${escapeHtml(ex.notes)}</div>` : ""}
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" data-set-timer="${ex.restSeconds}">Timer ${ex.restSeconds}d</button>
+          </div>
+        `).join("")}
+      </div>
+    `
+    : "";
+
   const exHtml = state.workouts.length === 0
-    ? `<p class="muted">Belum ada gerakan workout dari coach.</p>`
+    ? (activeCustom ? "" : `<p class="muted">Belum ada gerakan workout dari coach.</p>`)
     : state.workouts.map((w) => `
       <div class="list-item-row">
         <div>
@@ -666,10 +844,14 @@ function renderWorkoutSection() {
       </div>
     </div>
 
-    <div class="card">
-      <h3 style="margin-top:0;">Program Gerakan Olahraga</h3>
-      ${exHtml}
-    </div>
+    ${customHtml}
+
+    ${(!activeCustom || state.workouts.length > 0) ? `
+      <div class="card">
+        <h3 style="margin-top:0;">${activeCustom ? "Daftar Gerakan Tambahan" : "Program Gerakan Olahraga"}</h3>
+        ${exHtml}
+      </div>
+    ` : ""}
 
     <div class="card">
       <h3 style="margin-top:0;">Request Gerakan Workout ke Coach</h3>
@@ -816,12 +998,13 @@ function attachClientListeners(emailLower) {
     )
   );
 
-  const bindCol = (name, key) => {
+  const bindCol = (name, key, afterUpdate) => {
     state.unsubscribers.push(
       onSnapshot(
         query(collection(db, name), where("clientEmail", "==", emailLower)),
         (snap) => {
           state[key] = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => !d.deletedAt);
+          if (typeof afterUpdate === "function") afterUpdate();
           renderAll();
         },
         handleSnapshotError
@@ -829,12 +1012,13 @@ function attachClientListeners(emailLower) {
     );
   };
 
-  bindCol("sessions", "sessions");
+  bindCol("sessions", "sessions", () => syncNearestSlotSummarySubscription());
   bindCol("rescheduleRequests", "rescheduleRequests");
   bindCol("measurements", "measurements");
   bindCol("bodyCompositions", "bodyCompositions");
   bindCol("progressPhotos", "photos");
   bindCol("workoutExercises", "workouts");
+  bindCol("clientProgramAssignments", "programAssignments");
   bindCol("workoutRequests", "workoutRequests");
   bindCol("mealPlanNotes", "mealPlanNotes");
 }
