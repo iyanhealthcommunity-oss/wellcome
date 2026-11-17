@@ -3,8 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
   <title>IHC Portal Klien — Iyan Health Community</title>
   <link rel="icon" type="image/png" href="./assets/favicon.png" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("ihc_portal_theme") || "auto";
+        if (saved !== "light" && saved !== "dark" && saved !== "auto") saved = "auto";
+        var dark = saved === "dark" || (saved === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+      } catch (e) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
@@ -33,6 +44,15 @@
   <!-- Auth View -->
   <main id="auth-view" class="auth-page hidden">
     <section class="auth-container">
+      <div class="auth-theme-bar">
+        <span class="muted">Tema:</span>
+        <div class="theme-switcher" role="group" aria-label="Pilih tema tampilan">
+          <button type="button" class="theme-btn" data-theme-choice="auto">Otomatis</button>
+          <button type="button" class="theme-btn" data-theme-choice="light">Terang</button>
+          <button type="button" class="theme-btn" data-theme-choice="dark">Gelap</button>
+        </div>
+      </div>
+
       <div class="auth-brand">
         <img src="./assets/ihc-logo.png" alt="Logo IHC Iyan Health Community" class="ihc-logo-lg" />
         <h1>IHC Portal Klien</h1>
@@ -104,6 +124,14 @@
             <small id="sidebar-client-name">Klien</small>
           </div>
         </div>
+        <div class="sidebar-theme-box">
+          <span class="theme-label">Tampilan</span>
+          <div class="theme-switcher full-width" role="group" aria-label="Pilih tema tampilan">
+            <button type="button" class="theme-btn" data-theme-choice="auto">Otomatis</button>
+            <button type="button" class="theme-btn" data-theme-choice="light">Terang</button>
+            <button type="button" class="theme-btn" data-theme-choice="dark">Gelap</button>
+          </div>
+        </div>
         <nav class="nav-list" aria-label="Menu Portal Klien">
           <button type="button" class="nav-item active" data-menu="profile">Data Diri</button>
           <button type="button" class="nav-item" data-menu="schedule">Jadwal</button>
@@ -120,14 +148,24 @@
     <div class="portal-content-wrap">
       <!-- Standard Top Mobile Header -->
       <header class="mobile-header">
-        <div class="header-left">
-          <img src="./assets/ihc-logo.png" alt="Logo IHC" class="ihc-logo-sm" />
-          <div>
-            <strong id="mobile-header-title">Data Diri</strong>
-            <small id="mobile-client-badge" class="muted">WIB</small>
+        <div class="mobile-header-row">
+          <div class="header-left">
+            <img src="./assets/ihc-logo.png" alt="Logo IHC" class="ihc-logo-sm" />
+            <div>
+              <strong id="mobile-header-title">Data Diri</strong>
+              <small id="mobile-client-badge" class="muted">WIB</small>
+            </div>
+          </div>
+          <button type="button" id="mobile-logout-btn" class="btn btn-outline btn-sm">Keluar</button>
+        </div>
+        <div class="mobile-theme-row">
+          <span class="muted">Tema:</span>
+          <div class="theme-switcher" role="group" aria-label="Pilih tema tampilan">
+            <button type="button" class="theme-btn" data-theme-choice="auto">Otomatis</button>
+            <button type="button" class="theme-btn" data-theme-choice="light">Terang</button>
+            <button type="button" class="theme-btn" data-theme-choice="dark">Gelap</button>
           </div>
         </div>
-        <button type="button" id="mobile-logout-btn" class="btn btn-outline btn-sm">Keluar</button>
       </header>
 
       <main class="main-panel">
