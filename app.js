@@ -140,6 +140,10 @@ function applyTheme(preference) {
 }
 
 function initThemeSwitcher() {
+  if (window.__ihcTheme && typeof window.__ihcTheme.apply === "function") {
+    window.__ihcTheme.apply(window.__ihcTheme.getPref());
+    return;
+  }
   applyTheme(getStoredThemePreference());
 
   document.querySelectorAll("[data-theme-choice]").forEach((btn) => {
@@ -844,6 +848,7 @@ function escapeHtml(str) {
 }
 
 function boot() {
+  window.__ihcAppBooted = true;
   initThemeSwitcher();
   initTabs();
 

@@ -28,6 +28,7 @@
   --neutral-ink: #475467;
   --chart-grid: #dfe4ea;
   --overlay-scrim: rgba(17, 19, 21, 0.45);
+  --logo-backing: #ffffff;
   --shadow: 0 8px 24px rgba(17, 19, 21, 0.12);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --radius: 16px;
@@ -63,6 +64,7 @@
   --neutral-ink: #cbd5e1;
   --chart-grid: #2c3540;
   --overlay-scrim: rgba(0, 0, 0, 0.68);
+  --logo-backing: #ffffff;
   --shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
@@ -71,11 +73,15 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--ink);
+}
+
+body {
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
@@ -138,18 +144,18 @@ h1, h2, h3, strong {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  padding: 5px 8px;
-  min-height: 32px;
+  padding: 6px 10px;
+  min-height: 36px;
   border-radius: 7px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .theme-btn.active {
-  background: var(--surface-elevated);
-  color: var(--ink);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   box-shadow: var(--shadow-sm);
 }
 
@@ -221,14 +227,14 @@ h1, h2, h3, strong {
   }
 }
 
-/* IHC Logo & Pulsing Animation — keep clean white backing so black emblem stays crisp */
+/* IHC Logo & Pulsing Animation — keep clean white backing via CSS variable */
 .ihc-logo {
   width: 88px;
   height: 88px;
   border-radius: 20px;
   border: 1px solid var(--border);
   object-fit: cover;
-  background: #ffffff;
+  background: var(--logo-backing);
   padding: 2px;
 }
 
@@ -238,7 +244,7 @@ h1, h2, h3, strong {
   border-radius: 22px;
   border: 1px solid var(--border);
   object-fit: cover;
-  background: #ffffff;
+  background: var(--logo-backing);
   padding: 2px;
 }
 
@@ -248,7 +254,7 @@ h1, h2, h3, strong {
   border-radius: 10px;
   border: 1px solid var(--border);
   object-fit: cover;
-  background: #ffffff;
+  background: var(--logo-backing);
   padding: 2px;
 }
 
@@ -560,6 +566,7 @@ select:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
