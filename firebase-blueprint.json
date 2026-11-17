@@ -1,0 +1,372 @@
+{
+  "entities": {
+    "PackageRule": {
+      "title": "PackageRule",
+      "description": "Konfigurasi fasilitas otomatis per paket coaching (BASIC, STANDARD, PREMIUM)",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "tier": { "type": "string", "enum": ["BASIC", "STANDARD", "PREMIUM"] },
+        "maxSessionsPerWeek": { "type": "integer" },
+        "canReschedule": { "type": "boolean" },
+        "photoAnglesCsv": { "type": "string" },
+        "photoFrequencyDays": { "type": "integer" },
+        "measurementFieldsCsv": { "type": "string" },
+        "measurementFrequencyDays": { "type": "integer" },
+        "hasBodyComposition": { "type": "boolean" },
+        "bodyCompositionFrequencyDays": { "type": "integer" },
+        "hasMealPlan": { "type": "boolean" },
+        "mealPlanFrequencyDays": { "type": "integer" },
+        "workoutUpdateMode": { "type": "string" },
+        "workoutFrequencyDays": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "tier", "maxSessionsPerWeek", "canReschedule", "updatedAt"]
+    },
+    "ClientInvite": {
+      "title": "ClientInvite",
+      "description": "Penanda email klien terdaftar oleh coach agar hanya email terdaftar yang dapat membuat password di portal web",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "packageTier": { "type": "string", "enum": ["BASIC", "STANDARD", "PREMIUM"] },
+        "active": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "clientId", "packageTier", "active", "updatedAt"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Profil utama klien coaching IHC",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "emailNormalized": { "type": "string" },
+        "phone": { "type": "string" },
+        "packageTier": { "type": "string", "enum": ["BASIC", "STANDARD", "PREMIUM"] },
+        "status": { "type": "string", "enum": ["AKTIF", "JEDA", "SELESAI"] },
+        "goal": { "type": "string" },
+        "startDateMillis": { "type": "integer" },
+        "endDateMillis": { "type": "integer" },
+        "totalSessionsQuota": { "type": "integer" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "fullName", "emailNormalized", "packageTier", "status", "startDateMillis", "endDateMillis", "totalSessionsQuota", "createdAt", "updatedAt"]
+    },
+    "Measurement": {
+      "title": "Measurement",
+      "description": "Data pengukuran lingkar tubuh klien sesuai paket",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "recordedAt": { "type": "integer" },
+        "waistCm": { "type": "number" },
+        "neckCm": { "type": "number" },
+        "armCm": { "type": "number" },
+        "weightKg": { "type": "number" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "recordedAt", "waistCm", "updatedAt"]
+    },
+    "BodyComposition": {
+      "title": "BodyComposition",
+      "description": "Data komposisi tubuh khusus paket Premium",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "recordedAt": { "type": "integer" },
+        "bodyFatPercent": { "type": "number" },
+        "muscleMassKg": { "type": "number" },
+        "bodyAgeYears": { "type": "integer" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "recordedAt", "bodyFatPercent", "muscleMassKg", "bodyAgeYears", "updatedAt"]
+    },
+    "ProgressPhoto": {
+      "title": "ProgressPhoto",
+      "description": "Pratinjau terkompresi foto progres klien (foto asli di Google Drive coach appDataFolder)",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "angle": { "type": "string", "enum": ["DEPAN", "BELAKANG", "SAMPING_KANAN", "SAMPING_KIRI"] },
+        "takenAt": { "type": "integer" },
+        "previewBase64": { "type": "string" },
+        "driveFileId": { "type": "string" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "angle", "takenAt", "updatedAt"]
+    },
+    "WorkoutExercise": {
+      "title": "WorkoutExercise",
+      "description": "Daftar gerakan program latihan untuk klien beserta durasi istirahat",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "programDay": { "type": "string" },
+        "exerciseName": { "type": "string" },
+        "sets": { "type": "integer" },
+        "reps": { "type": "string" },
+        "loadNote": { "type": "string" },
+        "restSeconds": { "type": "integer" },
+        "coachNotes": { "type": "string" },
+        "sortOrder": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "exerciseName", "sets", "reps", "restSeconds", "updatedAt"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Jadwal sesi coaching (WIB) dan status kehadiran",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientName": { "type": "string" },
+        "title": { "type": "string" },
+        "startAtMillis": { "type": "integer" },
+        "endAtMillis": { "type": "integer" },
+        "slotKey": { "type": "string" },
+        "location": { "type": "string" },
+        "status": { "type": "string", "enum": ["TERJADWAL", "HADIR", "TIDAK_HADIR", "DIBATALKAN", "RESCHEDULED"] },
+        "recurringGroupId": { "type": "string" },
+        "notes": { "type": "string" },
+        "assignedProgramId": { "type": "string" },
+        "assignedProgramName": { "type": "string" },
+        "programSnapshotJson": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "startAtMillis", "endAtMillis", "status", "createdAt", "updatedAt"]
+    },
+    "RescheduleRequest": {
+      "title": "RescheduleRequest",
+      "description": "Permintaan reschedule dari klien Standard/Premium (diblokir untuk Basic)",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientName": { "type": "string" },
+        "originalStartMillis": { "type": "integer" },
+        "requestedStartMillis": { "type": "integer" },
+        "requestedEndMillis": { "type": "integer" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["MENUNGGU", "DISETUJUI", "DITOLAK"] },
+        "coachNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "sessionId", "clientId", "clientEmail", "requestedStartMillis", "requestedEndMillis", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "WorkoutRequest": {
+      "title": "WorkoutRequest",
+      "description": "Request gerakan olahraga dari klien ke coach",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientName": { "type": "string" },
+        "requestedExercise": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["MENUNGGU", "DISETUJUI", "DIBALAS", "DITOLAK"] },
+        "coachReply": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "requestedExercise", "status", "createdAt", "updatedAt"]
+    },
+    "ClientTaskSchedule": {
+      "title": "ClientTaskSchedule",
+      "description": "Jadwal input & checklist tugas coach per klien",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "taskType": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "nextDueMillis": { "type": "integer" },
+        "lastCompletedMillis": { "type": "integer" },
+        "frequencyDays": { "type": "integer" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "clientId", "taskType", "enabled", "frequencyDays", "updatedAt"]
+    },
+    "MealPlanNote": {
+      "title": "MealPlanNote",
+      "description": "Catatan update Meal Plan dari coach untuk klien Standard/Premium",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "title": { "type": "string" },
+        "note": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "title", "updatedAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit log perubahan jadwal dan status sesi (append-only)",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "action": { "type": "string" },
+        "entityType": { "type": "string" },
+        "entityId": { "type": "string" },
+        "summary": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "action", "entityType", "entityId", "summary", "createdAt"]
+    },
+    "CoachSettings": {
+      "title": "CoachSettings",
+      "description": "Pengaturan kapasitas sesi bersama, jam operasional, durasi default, dan harga paket khusus coach",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "maxStandardPerSlot": { "type": "integer" },
+        "maxBasicPerSlot": { "type": "integer" },
+        "maxTotalNonPremiumPerSlot": { "type": "integer" },
+        "openHourWib": { "type": "integer" },
+        "closeHourWib": { "type": "integer" },
+        "defaultSessionMinutes": { "type": "integer" },
+        "basicPriceIdr": { "type": "integer" },
+        "standardPriceIdr": { "type": "integer" },
+        "premiumPriceIdr": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "maxStandardPerSlot", "maxBasicPerSlot", "maxTotalNonPremiumPerSlot", "updatedAt"]
+    },
+    "WorkoutProgram": {
+      "title": "WorkoutProgram",
+      "description": "Template atau program latihan kustom bernama dari pustaka coach",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "targetClientId": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "name", "updatedAt"]
+    },
+    "WorkoutProgramExercise": {
+      "title": "WorkoutProgramExercise",
+      "description": "Gerakan terurut di dalam program latihan kustom",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "programId": { "type": "string" },
+        "exerciseName": { "type": "string" },
+        "sets": { "type": "integer" },
+        "reps": { "type": "string" },
+        "restSeconds": { "type": "integer" },
+        "notes": { "type": "string" },
+        "sortOrder": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "programId", "exerciseName", "sets", "reps", "restSeconds", "updatedAt"]
+    },
+    "ClientProgramAssignment": {
+      "title": "ClientProgramAssignment",
+      "description": "Penetapan program latihan ke klien (DEFAULT atau tanggal WIB tertentu) beserta snapshot gerakan",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "programId": { "type": "string" },
+        "programName": { "type": "string" },
+        "dateKeyWib": { "type": "string" },
+        "exercisesSnapshotJson": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "integer" }
+      },
+      "required": ["coachUid", "clientId", "clientEmail", "programId", "programName", "dateKeyWib", "updatedAt"]
+    },
+    "SessionSlotLock": {
+      "title": "SessionSlotLock",
+      "description": "Kunci transaksi atomik kapasitas slot jadwal (khusus coach)",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "slotKey": { "type": "string" },
+        "startAtMillis": { "type": "integer" },
+        "endAtMillis": { "type": "integer" },
+        "activeSessions": { "type": "object" },
+        "premiumCount": { "type": "integer" },
+        "standardCount": { "type": "integer" },
+        "basicCount": { "type": "integer" },
+        "totalCount": { "type": "integer" },
+        "isOneOnOne": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "slotKey", "startAtMillis", "endAtMillis", "activeSessions", "totalCount", "isOneOnOne", "updatedAt"]
+    },
+    "SessionSlotSummary": {
+      "title": "SessionSlotSummary",
+      "description": "Ringkasan slot ramah privasi (tanpa nama/email/paket klien lain)",
+      "type": "object",
+      "properties": {
+        "coachUid": { "type": "string" },
+        "slotKey": { "type": "string" },
+        "startAtMillis": { "type": "integer" },
+        "endAtMillis": { "type": "integer" },
+        "participantCount": { "type": "integer" },
+        "isOneOnOne": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachUid", "slotKey", "startAtMillis", "endAtMillis", "participantCount", "isOneOnOne", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/packageRules/{tier}": { "schema": "PackageRule", "description": "Aturan fasilitas paket" },
+    "/clientInvites/{emailNormalized}": { "schema": "ClientInvite", "description": "Verifikasi pendaftaran email klien" },
+    "/clients/{clientId}": { "schema": "Client", "description": "Data klien" },
+    "/measurements/{measurementId}": { "schema": "Measurement", "description": "Pengukuran lingkar" },
+    "/bodyCompositions/{bodyCompId}": { "schema": "BodyComposition", "description": "Komposisi tubuh Premium" },
+    "/progressPhotos/{photoId}": { "schema": "ProgressPhoto", "description": "Pratinjau foto progres" },
+    "/workoutExercises/{exerciseId}": { "schema": "WorkoutExercise", "description": "Program latihan" },
+    "/sessions/{sessionId}": { "schema": "Session", "description": "Jadwal & kehadiran sesi" },
+    "/rescheduleRequests/{requestId}": { "schema": "RescheduleRequest", "description": "Permintaan reschedule" },
+    "/workoutRequests/{requestId}": { "schema": "WorkoutRequest", "description": "Request gerakan workout" },
+    "/clientTaskSchedules/{scheduleId}": { "schema": "ClientTaskSchedule", "description": "Jadwal input & checklist tugas coach" },
+    "/mealPlanNotes/{noteId}": { "schema": "MealPlanNote", "description": "Catatan Meal Plan klien" },
+    "/activityLogs/{logId}": { "schema": "ActivityLog", "description": "Log aktivitas coach" },
+    "/coachSettings/{coachUid}": { "schema": "CoachSettings", "description": "Pengaturan kapasitas sesi bersama" },
+    "/workoutPrograms/{programId}": { "schema": "WorkoutProgram", "description": "Pustaka program latihan kustom" },
+    "/workoutProgramExercises/{exerciseId}": { "schema": "WorkoutProgramExercise", "description": "Daftar gerakan program latihan kustom" },
+    "/clientProgramAssignments/{assignmentId}": { "schema": "ClientProgramAssignment", "description": "Penetapan program latihan ke klien" },
+    "/sessionSlotLocks/{slotDocId}": { "schema": "SessionSlotLock", "description": "Kunci atomik kapasitas slot sesi" },
+    "/sessionSlotSummaries/{slotDocId}": { "schema": "SessionSlotSummary", "description": "Ringkasan jumlah peserta slot tanpa PII" }
+  }
+}

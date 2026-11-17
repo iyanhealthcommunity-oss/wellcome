@@ -1,0 +1,679 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 160 && id.matches('^[a-zA-Z0-9_\\-@.+]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function authEmailLower() {
+      return isSignedIn() && request.auth.token.email is string
+        ? request.auth.token.email.lower()
+        : '';
+    }
+
+    function isCoachOwner(coachUid) {
+      return isSignedIn() && request.auth.uid == coachUid;
+    }
+
+    function isMatchingClientEmail(emailNormalized) {
+      return isSignedIn() &&
+             emailNormalized is string &&
+             authEmailLower() != '' &&
+             emailNormalized == authEmailLower();
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidPackageTier(tier) {
+      return tier in ['BASIC', 'STANDARD', 'PREMIUM'];
+    }
+
+    function isValidPackageRule(data) {
+      return data.coachUid is string && data.coachUid.size() <= 128 &&
+             isValidPackageTier(data.tier) &&
+             data.maxSessionsPerWeek is int && data.maxSessionsPerWeek >= 1 && data.maxSessionsPerWeek <= 21 &&
+             data.canReschedule is bool &&
+             (!('photoAnglesCsv' in data) || (data.photoAnglesCsv is string && data.photoAnglesCsv.size() <= 200)) &&
+             (!('photoFrequencyDays' in data) || (data.photoFrequencyDays is int && data.photoFrequencyDays >= 0 && data.photoFrequencyDays <= 365)) &&
+             (!('measurementFieldsCsv' in data) || (data.measurementFieldsCsv is string && data.measurementFieldsCsv.size() <= 200)) &&
+             (!('measurementFrequencyDays' in data) || (data.measurementFrequencyDays is int && data.measurementFrequencyDays >= 0 && data.measurementFrequencyDays <= 365)) &&
+             (!('hasBodyComposition' in data) || data.hasBodyComposition is bool) &&
+             (!('bodyCompositionFrequencyDays' in data) || (data.bodyCompositionFrequencyDays is int && data.bodyCompositionFrequencyDays >= 0 && data.bodyCompositionFrequencyDays <= 365)) &&
+             (!('hasMealPlan' in data) || data.hasMealPlan is bool) &&
+             (!('mealPlanFrequencyDays' in data) || (data.mealPlanFrequencyDays is int && data.mealPlanFrequencyDays >= 0 && data.mealPlanFrequencyDays <= 365)) &&
+             (!('workoutUpdateMode' in data) || (data.workoutUpdateMode is string && data.workoutUpdateMode.size() <= 40)) &&
+             (!('workoutFrequencyDays' in data) || (data.workoutFrequencyDays is int && data.workoutFrequencyDays >= 0 && data.workoutFrequencyDays <= 365)) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidClient(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+             data.emailNormalized is string && data.emailNormalized.size() >= 3 && data.emailNormalized.size() <= 160 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
+             isValidPackageTier(data.packageTier) &&
+             data.status in ['AKTIF', 'JEDA', 'SELESAI'] &&
+             (!('goal' in data) || (data.goal is string && data.goal.size() <= 500)) &&
+             (!('startDateMillis' in data) || data.startDateMillis is int) &&
+             (!('endDateMillis' in data) || data.endDateMillis is int) &&
+             (!('totalSessionsQuota' in data) || (data.totalSessionsQuota is int && data.totalSessionsQuota >= 1 && data.totalSessionsQuota <= 500)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMeasurement(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             data.recordedAt is int &&
+             data.waistCm is number && data.waistCm > 0 && data.waistCm < 400 &&
+             (!('neckCm' in data) || data.neckCm == null || (data.neckCm is number && data.neckCm > 0 && data.neckCm < 200)) &&
+             (!('armCm' in data) || data.armCm == null || (data.armCm is number && data.armCm > 0 && data.armCm < 200)) &&
+             (!('weightKg' in data) || data.weightKg == null || (data.weightKg is number && data.weightKg > 0 && data.weightKg < 500)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidBodyComposition(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             data.recordedAt is int &&
+             data.bodyFatPercent is number && data.bodyFatPercent > 0 && data.bodyFatPercent < 90 &&
+             data.muscleMassKg is number && data.muscleMassKg > 0 && data.muscleMassKg < 250 &&
+             data.bodyAgeYears is int && data.bodyAgeYears >= 10 && data.bodyAgeYears <= 120 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidProgressPhoto(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             data.angle in ['DEPAN', 'BELAKANG', 'SAMPING_KANAN', 'SAMPING_KIRI'] &&
+             data.takenAt is int &&
+             (!('previewBase64' in data) || (data.previewBase64 is string && data.previewBase64.size() <= 900000)) &&
+             (!('driveFileId' in data) || (data.driveFileId is string && data.driveFileId.size() <= 300)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidWorkoutExercise(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             (!('programDay' in data) || (data.programDay is string && data.programDay.size() <= 80)) &&
+             data.exerciseName is string && data.exerciseName.size() >= 1 && data.exerciseName.size() <= 120 &&
+             data.sets is int && data.sets >= 1 && data.sets <= 30 &&
+             data.reps is string && data.reps.size() >= 1 && data.reps.size() <= 40 &&
+             (!('loadNote' in data) || (data.loadNote is string && data.loadNote.size() <= 120)) &&
+             data.restSeconds is int && data.restSeconds >= 5 && data.restSeconds <= 600 &&
+             (!('coachNotes' in data) || (data.coachNotes is string && data.coachNotes.size() <= 1000)) &&
+             (!('sortOrder' in data) || data.sortOrder is int) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidSession(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             (!('clientName' in data) || (data.clientName is string && data.clientName.size() <= 120)) &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 120)) &&
+             data.startAtMillis is int &&
+             data.endAtMillis is int &&
+             data.endAtMillis > data.startAtMillis &&
+             (!('slotKey' in data) || (data.slotKey is string && data.slotKey.size() <= 80)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 120)) &&
+             data.status in ['TERJADWAL', 'HADIR', 'TIDAK_HADIR', 'DIBATALKAN', 'RESCHEDULED'] &&
+             (!('recurringGroupId' in data) || data.recurringGroupId == null || (data.recurringGroupId is string && data.recurringGroupId.size() <= 128)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             (!('assignedProgramId' in data) || data.assignedProgramId == null || (data.assignedProgramId is string && data.assignedProgramId.size() <= 128)) &&
+             (!('assignedProgramName' in data) || (data.assignedProgramName is string && data.assignedProgramName.size() <= 140)) &&
+             (!('programSnapshotJson' in data) || (data.programSnapshotJson is string && data.programSnapshotJson.size() <= 50000)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCoachSettings(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.maxStandardPerSlot is int && data.maxStandardPerSlot >= 1 && data.maxStandardPerSlot <= 20 &&
+             data.maxBasicPerSlot is int && data.maxBasicPerSlot >= 1 && data.maxBasicPerSlot <= 20 &&
+             data.maxTotalNonPremiumPerSlot is int && data.maxTotalNonPremiumPerSlot >= 1 && data.maxTotalNonPremiumPerSlot <= 20 &&
+             (!('openHourWib' in data) || (data.openHourWib is int && data.openHourWib >= 0 && data.openHourWib <= 22)) &&
+             (!('closeHourWib' in data) || (data.closeHourWib is int && data.closeHourWib >= 1 && data.closeHourWib <= 24 && (!('openHourWib' in data) || data.closeHourWib > data.openHourWib))) &&
+             (!('defaultSessionMinutes' in data) || (data.defaultSessionMinutes is int && data.defaultSessionMinutes >= 15 && data.defaultSessionMinutes <= 240)) &&
+             (!('basicPriceIdr' in data) || (data.basicPriceIdr is int && data.basicPriceIdr >= 0 && data.basicPriceIdr <= 100000000)) &&
+             (!('standardPriceIdr' in data) || (data.standardPriceIdr is int && data.standardPriceIdr >= 0 && data.standardPriceIdr <= 100000000)) &&
+             (!('premiumPriceIdr' in data) || (data.premiumPriceIdr is int && data.premiumPriceIdr >= 0 && data.premiumPriceIdr <= 100000000)) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidWorkoutProgram(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (!('targetClientId' in data) || data.targetClientId == null || (data.targetClientId is string && data.targetClientId.size() <= 128)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidWorkoutProgramExercise(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.programId is string && data.programId.size() >= 1 && data.programId.size() <= 128 &&
+             data.exerciseName is string && data.exerciseName.size() >= 1 && data.exerciseName.size() <= 120 &&
+             data.sets is int && data.sets >= 1 && data.sets <= 30 &&
+             data.reps is string && data.reps.size() >= 1 && data.reps.size() <= 40 &&
+             data.restSeconds is int && data.restSeconds >= 5 && data.restSeconds <= 600 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             (!('sortOrder' in data) || data.sortOrder is int) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidClientProgramAssignment(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             data.programId is string && data.programId.size() >= 1 && data.programId.size() <= 128 &&
+             data.programName is string && data.programName.size() >= 1 && data.programName.size() <= 140 &&
+             data.dateKeyWib is string && data.dateKeyWib.size() >= 1 && data.dateKeyWib.size() <= 20 &&
+             (!('exercisesSnapshotJson' in data) || (data.exercisesSnapshotJson is string && data.exercisesSnapshotJson.size() <= 50000)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidSlotLock(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.slotKey is string && data.slotKey.size() >= 3 && data.slotKey.size() <= 80 &&
+             data.startAtMillis is int &&
+             data.endAtMillis is int &&
+             data.endAtMillis > data.startAtMillis &&
+             data.activeSessions is map &&
+             data.premiumCount is int && data.premiumCount >= 0 &&
+             data.standardCount is int && data.standardCount >= 0 &&
+             data.basicCount is int && data.basicCount >= 0 &&
+             data.totalCount is int && data.totalCount >= 0 &&
+             data.isOneOnOne is bool &&
+             (data.premiumCount == 0 || data.totalCount <= 1) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidSlotSummary(data) {
+      return data.keys().hasOnly(['coachUid', 'slotKey', 'startAtMillis', 'endAtMillis', 'participantCount', 'isOneOnOne', 'updatedAt']) &&
+             data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.slotKey is string && data.slotKey.size() >= 3 && data.slotKey.size() <= 80 &&
+             data.startAtMillis is int &&
+             data.endAtMillis is int &&
+             data.endAtMillis > data.startAtMillis &&
+             data.participantCount is int && data.participantCount >= 0 &&
+             data.isOneOnOne is bool &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRescheduleRequest(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.sessionId is string && data.sessionId.size() >= 1 && data.sessionId.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             (!('clientName' in data) || (data.clientName is string && data.clientName.size() <= 120)) &&
+             (!('originalStartMillis' in data) || data.originalStartMillis is int) &&
+             data.requestedStartMillis is int &&
+             data.requestedEndMillis is int &&
+             data.requestedEndMillis > data.requestedStartMillis &&
+             data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 500 &&
+             data.status in ['MENUNGGU', 'DISETUJUI', 'DITOLAK'] &&
+             (!('coachNote' in data) || (data.coachNote is string && data.coachNote.size() <= 500)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidWorkoutRequest(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             (!('clientName' in data) || (data.clientName is string && data.clientName.size() <= 120)) &&
+             data.requestedExercise is string && data.requestedExercise.size() >= 1 && data.requestedExercise.size() <= 120 &&
+             (!('reason' in data) || (data.reason is string && data.reason.size() <= 500)) &&
+             data.status in ['MENUNGGU', 'DISETUJUI', 'DIBALAS', 'DITOLAK'] &&
+             (!('coachReply' in data) || (data.coachReply is string && data.coachReply.size() <= 500)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidTaskSchedule(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.taskType in ['FOTO_PROGRES', 'PENGUKURAN_LINGKAR', 'KOMPOSISI_TUBUH', 'MEAL_PLAN', 'WORKOUT'] &&
+             data.enabled is bool &&
+             (!('nextDueMillis' in data) || data.nextDueMillis == null || data.nextDueMillis is int) &&
+             (!('lastCompletedMillis' in data) || data.lastCompletedMillis == null || data.lastCompletedMillis is int) &&
+             data.frequencyDays is int && data.frequencyDays >= 0 && data.frequencyDays <= 365 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidMealPlanNote(data) {
+      return data.coachUid is string && data.coachUid.size() >= 1 && data.coachUid.size() <= 128 &&
+             data.clientId is string && data.clientId.size() >= 1 && data.clientId.size() <= 128 &&
+             data.clientEmail is string && data.clientEmail.size() >= 3 && data.clientEmail.size() <= 160 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 3000)) &&
+             (!('deletedAt' in data) || data.deletedAt == null || data.deletedAt is int) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Package rules (coach writes and lists own; signed-in clients can get individual tier doc)
+    match /packageRules/{tier} {
+      allow get: if isSignedIn() && isValidPackageTier(tier);
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow create, update: if isSignedIn() &&
+        isValidPackageTier(tier) &&
+        incoming().coachUid == request.auth.uid &&
+        incoming().tier == tier &&
+        isValidPackageRule(incoming());
+      allow delete: if false;
+    }
+
+    // Client invite lookup for "Buat Password" gate (never allow list!)
+    match /clientInvites/{emailNormalized} {
+      allow get: if isValidId(emailNormalized);
+      allow list: if false;
+      allow create, update: if isSignedIn() &&
+        isValidId(emailNormalized) &&
+        incoming().coachUid == request.auth.uid &&
+        incoming().clientId is string && incoming().clientId.size() <= 128 &&
+        isValidPackageTier(incoming().packageTier) &&
+        incoming().active is bool &&
+        isValidTimestamp(incoming().updatedAt);
+      allow delete: if false;
+    }
+
+    // Clients collection (no hard delete; soft delete via deletedAt)
+    match /clients/{clientId} {
+      allow get: if isValidId(clientId) && (
+        isCoachOwner(existing().coachUid) ||
+        (isMatchingClientEmail(existing().emailNormalized) && (!('deletedAt' in existing()) || existing().deletedAt == null))
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().emailNormalized == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(clientId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidClient(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(clientId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        incoming().createdAt == existing().createdAt &&
+        isValidClient(incoming());
+      allow delete: if false;
+    }
+
+    // Measurements
+    match /measurements/{measurementId} {
+      allow get: if isValidId(measurementId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(measurementId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidMeasurement(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(measurementId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidMeasurement(incoming());
+      allow delete: if false;
+    }
+
+    // Body Composition (Premium)
+    match /bodyCompositions/{bodyCompId} {
+      allow get: if isValidId(bodyCompId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(bodyCompId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidBodyComposition(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(bodyCompId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidBodyComposition(incoming());
+      allow delete: if false;
+    }
+
+    // Progress Photos (compressed previews + Drive file ID)
+    match /progressPhotos/{photoId} {
+      allow get: if isValidId(photoId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(photoId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidProgressPhoto(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(photoId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidProgressPhoto(incoming());
+      allow delete: if false;
+    }
+
+    // Workout Exercises
+    match /workoutExercises/{exerciseId} {
+      allow get: if isValidId(exerciseId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(exerciseId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidWorkoutExercise(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(exerciseId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidWorkoutExercise(incoming());
+      allow delete: if false;
+    }
+
+    // Sessions
+    match /sessions/{sessionId} {
+      allow get: if isValidId(sessionId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(sessionId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidSession(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(sessionId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        incoming().createdAt == existing().createdAt &&
+        isValidSession(incoming());
+      allow delete: if false;
+    }
+
+    // Reschedule Requests: client can ONLY create if their packageTier != 'BASIC'
+    match /rescheduleRequests/{requestId} {
+      allow get: if isValidId(requestId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(requestId) &&
+        isValidRescheduleRequest(incoming()) &&
+        incoming().status == 'MENUNGGU' &&
+        isMatchingClientEmail(incoming().clientEmail) &&
+        exists(/databases/$(database)/documents/clients/$(incoming().clientId)) &&
+        get(/databases/$(database)/documents/clients/$(incoming().clientId)).data.emailNormalized == authEmailLower() &&
+        get(/databases/$(database)/documents/clients/$(incoming().clientId)).data.packageTier != 'BASIC';
+      allow update: if isSignedIn() &&
+        isValidId(requestId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        incoming().createdAt == existing().createdAt &&
+        isValidRescheduleRequest(incoming());
+      allow delete: if false;
+    }
+
+    // Workout Requests: client can create their own, coach can reply/update
+    match /workoutRequests/{requestId} {
+      allow get: if isValidId(requestId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(requestId) &&
+        isValidWorkoutRequest(incoming()) &&
+        incoming().status == 'MENUNGGU' &&
+        isMatchingClientEmail(incoming().clientEmail) &&
+        exists(/databases/$(database)/documents/clients/$(incoming().clientId)) &&
+        get(/databases/$(database)/documents/clients/$(incoming().clientId)).data.emailNormalized == authEmailLower();
+      allow update: if isSignedIn() &&
+        isValidId(requestId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        incoming().createdAt == existing().createdAt &&
+        isValidWorkoutRequest(incoming());
+      allow delete: if false;
+    }
+
+    // Client Task Schedules (Jadwal Input + Checklist Tugas Coach — coach only)
+    match /clientTaskSchedules/{scheduleId} {
+      allow get: if isValidId(scheduleId) && isCoachOwner(existing().coachUid);
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow create: if isSignedIn() &&
+        isValidId(scheduleId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidTaskSchedule(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(scheduleId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidTaskSchedule(incoming());
+      allow delete: if false;
+    }
+
+    // Meal Plan Notes (coach writes, matching client reads)
+    match /mealPlanNotes/{noteId} {
+      allow get: if isValidId(noteId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isSignedIn() &&
+        isValidId(noteId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidMealPlanNote(incoming());
+      allow update: if isSignedIn() &&
+        isValidId(noteId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidMealPlanNote(incoming());
+      allow delete: if false;
+    }
+
+    // Activity Logs (append-only by coach)
+    match /activityLogs/{logId} {
+      allow get: if isValidId(logId) && isCoachOwner(existing().coachUid);
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow create: if isSignedIn() &&
+        isValidId(logId) &&
+        incoming().coachUid == request.auth.uid &&
+        incoming().action is string && incoming().action.size() >= 1 && incoming().action.size() <= 80 &&
+        incoming().entityType is string && incoming().entityType.size() >= 1 && incoming().entityType.size() <= 80 &&
+        incoming().entityId is string && incoming().entityId.size() >= 1 && incoming().entityId.size() <= 160 &&
+        incoming().summary is string && incoming().summary.size() >= 1 && incoming().summary.size() <= 400 &&
+        isValidTimestamp(incoming().createdAt);
+      allow update, delete: if false;
+    }
+
+    // Coach slot capacity settings (coach only)
+    match /coachSettings/{coachUid} {
+      allow get: if isValidId(coachUid) && isCoachOwner(coachUid) && (
+        resource == null || existing().coachUid == request.auth.uid
+      );
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow create, update: if isValidId(coachUid) &&
+        isCoachOwner(coachUid) &&
+        incoming().coachUid == coachUid &&
+        isValidCoachSettings(incoming());
+      allow delete: if false;
+    }
+
+    // Custom workout programs (coach only)
+    match /workoutPrograms/{programId} {
+      allow get: if isValidId(programId) && isCoachOwner(existing().coachUid);
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow create: if isValidId(programId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidWorkoutProgram(incoming());
+      allow update: if isValidId(programId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidWorkoutProgram(incoming());
+      allow delete: if false;
+    }
+
+    // Custom workout program exercises (coach only)
+    match /workoutProgramExercises/{exerciseId} {
+      allow get: if isValidId(exerciseId) && isCoachOwner(existing().coachUid);
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow create: if isValidId(exerciseId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidWorkoutProgramExercise(incoming());
+      allow update: if isValidId(exerciseId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidWorkoutProgramExercise(incoming());
+      allow delete: if false;
+    }
+
+    // Client program assignments (coach writes, matching client reads)
+    match /clientProgramAssignments/{assignmentId} {
+      allow get: if isValidId(assignmentId) && (
+        isCoachOwner(existing().coachUid) ||
+        isMatchingClientEmail(existing().clientEmail)
+      );
+      allow list: if isSignedIn() && (
+        existing().coachUid == request.auth.uid ||
+        existing().clientEmail == authEmailLower()
+      );
+      allow create: if isValidId(assignmentId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidClientProgramAssignment(incoming());
+      allow update: if isValidId(assignmentId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidClientProgramAssignment(incoming());
+      allow delete: if false;
+    }
+
+    // Atomic session slot capacity locks (strictly coach only)
+    match /sessionSlotLocks/{slotDocId} {
+      allow get: if isValidId(slotDocId) && isSignedIn() && (
+        (resource == null && slotDocId.matches('^' + request.auth.uid + '_.*')) ||
+        (resource != null && existing().coachUid == request.auth.uid)
+      );
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow create: if isValidId(slotDocId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidSlotLock(incoming());
+      allow update: if isValidId(slotDocId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidSlotLock(incoming());
+      allow delete: if false;
+    }
+
+    // Privacy-safe slot summaries (no PII; clients can only get if active participant)
+    match /sessionSlotSummaries/{slotDocId} {
+      allow list: if isSignedIn() && existing().coachUid == request.auth.uid;
+      allow get: if isValidId(slotDocId) && isSignedIn() && (
+        (resource == null && slotDocId.matches('^' + request.auth.uid + '_.*')) ||
+        (resource != null && (
+          isCoachOwner(existing().coachUid) ||
+          (
+            authEmailLower() != '' &&
+            exists(/databases/$(database)/documents/sessionSlotSummaries/$(slotDocId)/participants/$(authEmailLower())) &&
+            get(/databases/$(database)/documents/sessionSlotSummaries/$(slotDocId)/participants/$(authEmailLower())).data.active == true
+          )
+        ))
+      );
+      allow create: if isValidId(slotDocId) &&
+        incoming().coachUid == request.auth.uid &&
+        isValidSlotSummary(incoming());
+      allow update: if isValidId(slotDocId) &&
+        existing().coachUid == request.auth.uid &&
+        incoming().coachUid == existing().coachUid &&
+        isValidSlotSummary(incoming());
+      allow delete: if false;
+
+      match /participants/{participantEmail} {
+        allow get: if isValidId(slotDocId) && isValidId(participantEmail) && isSignedIn() && (
+          (resource == null && slotDocId.matches('^' + request.auth.uid + '_.*')) ||
+          (resource != null && (
+            isCoachOwner(existing().coachUid) ||
+            (authEmailLower() != '' && participantEmail == authEmailLower())
+          ))
+        );
+        allow list: if isValidId(slotDocId) && isSignedIn() && existing().coachUid == request.auth.uid;
+        allow create, update: if isValidId(slotDocId) &&
+          isValidId(participantEmail) &&
+          incoming().coachUid == request.auth.uid &&
+          incoming().clientEmail is string &&
+          incoming().slotDocId is string &&
+          incoming().active is bool &&
+          isValidTimestamp(incoming().updatedAt);
+        allow delete: if false;
+      }
+    }
+  }
+}

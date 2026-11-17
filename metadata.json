@@ -1,0 +1,6 @@
+{
+  "name": "IHC Management",
+  "description": "Aplikasi manajemen coaching kebugaran Iyan Health Community (IHC) dengan Cloud Firestore, Google Drive sync, dan portal web klien.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
