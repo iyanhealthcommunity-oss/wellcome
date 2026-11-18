@@ -708,8 +708,9 @@ function renderProfileSection() {
         <li>Kapasitas pertemuan: maksimal ${fac.maxPerWeek}x per minggu</li>
         <li>Reschedule jadwal: ${fac.canReschedule ? "Aktif (dapat mengajukan via tab Jadwal)" : "Terkunci untuk paket Basic"}</li>
         <li>Foto progres: ${fac.angles.map((a) => ANGLE_LABELS[a] || a).join(", ")}</li>
+        <li>Berat badan: Timbang mingguan (1x per minggu, semua paket)</li>
         <li>Pengukuran lingkar: ${fac.measurements.join(", ")}</li>
-        <li>Komposisi tubuh: ${fac.hasBodyComp ? "Aktif (Body Fat %, Massa Otot, Umur Tubuh)" : "Tidak termasuk"}</li>
+        <li>Komposisi tubuh: ${fac.hasBodyComp ? "Aktif (Body Fat %, Umur Tubuh)" : "Tidak termasuk"}</li>
         <li>Meal plan: ${fac.hasMealPlan ? "Tersedia update dari coach" : "Tidak termasuk"}</li>
       </ul>
     </div>
@@ -1066,23 +1067,61 @@ function buildTrendSvg(label, unit, values) {
   `;
 }
 
+function formatSignedDelta(delta, unit) {
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta.toFixed(1)} ${unit}`;
+}
+
 function renderProgressSection() {
   const container = el("section-progress");
   const fac = getFacility();
   const sortedM = state.measurements.slice().sort((a, b) => a.recordedAt - b.recordedAt);
   const sortedB = state.bodyCompositions.slice().sort((a, b) => a.recordedAt - b.recordedAt);
 
-  let html = `<div class="grid-cards">`;
-  html += buildTrendSvg("Lingkar Perut", "cm", sortedM.map((m) => m.waistCm).filter((v) => typeof v === "number"));
+  const weightEntries = sortedM.filter((m) => typeof m.weightKg === "number" && m.weightKg >= 20 && m.weightKg <= 300);
+  let weightSummaryHtml = "";
+  if (weightEntries.length > 0) {
+    const latestEntry = weightEntries[weightEntries.length - 1];
+    const latestW = latestEntry.weightKg;
+    const prevW = weightEntries.length >= 2 ? weightEntries[weightEntries.length - 2].weightKg : null;
+    const firstW = weightEntries.length >= 2 ? weightEntries[0].weightKg : null;
+    const prevText = prevW !== null ? formatSignedDelta(latestW - prevW, "kg") : "Belum ada pembanding";
+    const firstText = firstW !== null ? formatSignedDelta(latestW - firstW, "kg") : "—";
+    weightSummaryHtml = `
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div>
+            <strong>Ringkasan Berat Badan (Mingguan)</strong>
+            <div class="muted">Terakhir dicatat: ${formatWibDate(latestEntry.recordedAt)}</div>
+          </div>
+          <span style="color:var(--emerald);font-weight:700;font-size:1.25rem;">${latestW.toFixed(1)} kg</span>
+        </div>
+        <div class="grid-cards" style="margin-top:10px;">
+          <div><strong>Vs Timbangan Sebelumnya</strong><div class="muted">${escapeHtml(prevText)}</div></div>
+          <div><strong>Sejak Timbangan Pertama</strong><div class="muted">${escapeHtml(firstText)}</div></div>
+        </div>
+      </div>
+    `;
+  } else {
+    weightSummaryHtml = `
+      <div class="card" style="margin-bottom:14px;">
+        <strong>Ringkasan Berat Badan (Mingguan)</strong>
+        <p class="muted" style="margin-bottom:0;">Belum ada data timbangan berat badan.</p>
+      </div>
+    `;
+  }
+
+  let html = `${weightSummaryHtml}<div class="grid-cards">`;
+  html += buildTrendSvg("Berat Badan", "kg", weightEntries.map((m) => m.weightKg));
+  html += buildTrendSvg("Lingkar Perut", "cm", sortedM.map((m) => m.waistCm).filter((v) => typeof v === "number" && v > 0));
   if (fac.measurements.includes("LEHER")) {
-    html += buildTrendSvg("Lingkar Leher", "cm", sortedM.map((m) => m.neckCm).filter((v) => typeof v === "number"));
+    html += buildTrendSvg("Lingkar Leher", "cm", sortedM.map((m) => m.neckCm).filter((v) => typeof v === "number" && v > 0));
   }
   if (fac.measurements.includes("LENGAN")) {
-    html += buildTrendSvg("Lingkar Lengan", "cm", sortedM.map((m) => m.armCm).filter((v) => typeof v === "number"));
+    html += buildTrendSvg("Lingkar Lengan", "cm", sortedM.map((m) => m.armCm).filter((v) => typeof v === "number" && v > 0));
   }
   if (fac.hasBodyComp) {
     html += buildTrendSvg("Body Fat %", "%", sortedB.map((b) => b.bodyFatPercent).filter((v) => typeof v === "number"));
-    html += buildTrendSvg("Massa Otot", "kg", sortedB.map((b) => b.muscleMassKg).filter((v) => typeof v === "number"));
     html += buildTrendSvg("Umur Tubuh", "thn", sortedB.map((b) => b.bodyAgeYears).filter((v) => typeof v === "number"));
   }
   html += `</div>`;
