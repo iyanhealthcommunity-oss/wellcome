@@ -75,6 +75,7 @@ const ANGLE_LABELS = {
 
 const CLIENT_STATUS_LABELS = {
   AKTIF: "Aktif",
+  DITAHAN: "Ditahan",
   SELESAI: "Selesai",
   JEDA: "Jeda"
 };
@@ -84,7 +85,8 @@ const SESSION_STATUS_LABELS = {
   HADIR: "Hadir",
   TIDAK_HADIR: "Tidak Hadir",
   DIBATALKAN: "Dibatalkan",
-  RESCHEDULED: "Dijadwalkan Ulang"
+  RESCHEDULED: "Dijadwalkan Ulang",
+  DITAHAN: "Ditahan"
 };
 
 const REQUEST_STATUS_LABELS = {
@@ -94,12 +96,36 @@ const REQUEST_STATUS_LABELS = {
   DIBALAS: "Dibalas"
 };
 
+const HOLD_STATUS_LABELS = {
+  REQUESTED: "Menunggu",
+  ACTIVE: "Aktif",
+  COMPLETED: "Selesai",
+  REJECTED: "Ditolak",
+  CANCELLED: "Dibatalkan"
+};
+
+const HOLD_REASON_LABELS = {
+  SAKIT: "Sakit",
+  KECELAKAAN: "Kecelakaan",
+  HALANGAN_PRIBADI: "Halangan Pribadi",
+  PERJALANAN_DINAS: "Perjalanan / Dinas",
+  COACH_BERHALANGAN: "Coach Berhalangan",
+  LAINNYA: "Lainnya"
+};
+
+const DEFAULT_HOLD_TERMS_TEXT =
+  "Hold / jeda paket berlaku minimal 7 hari, maksimal total 30 hari & maksimal 2x per periode paket. " +
+  "Pengajuan terencana minimal 24 jam sebelum sesi berikutnya. Hold darurat (sakit/kecelakaan) " +
+  "maksimal dilaporkan 48 jam setelah sesi terlewat (berlaku mundur maksimal 7 hari). " +
+  "Masa aktif paket otomatis diperpanjang sesuai jumlah hari hold yang terpakai.";
+
 const state = {
   auth: null,
   db: null,
   clientDoc: null,
   packageRule: null,
   sessions: [],
+  holds: [],
   rescheduleRequests: [],
   measurements: [],
   bodyCompositions: [],
@@ -268,6 +294,155 @@ function formatWibTime(millis) {
   return `${WIB_FORMAT_TIME.format(new Date(millis))} WIB`;
 }
 
+function wibDateStartMillis(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ""))) return NaN;
+  return new Date(`${dateStr}T00:00:00+07:00`).getTime();
+}
+
+function addDaysToWibKey(dayKey, deltaDays) {
+  const base = wibDateStartMillis(dayKey);
+  if (Number.isNaN(base)) return toWibDayKey(Date.now() + deltaDays * 86_400_000);
+  return toWibDayKey(base + deltaDays * 86_400_000);
+}
+
+function computeHoldInclusiveDays(startMillis, endMillis) {
+  if (!Number.isFinite(startMillis) || !Number.isFinite(endMillis) || endMillis < startMillis) return 0;
+  return Math.round((endMillis - startMillis) / 86_400_000) + 1;
+}
+
+function getActiveHold() {
+  return state.holds.find((h) => h.status === "ACTIVE") || null;
+}
+
+function getPendingHold() {
+  return state.holds.find((h) => h.status === "REQUESTED") || null;
+}
+
+function buildActiveHoldBannerHtml() {
+  const active = getActiveHold();
+  const c = state.clientDoc;
+  if (!active && c?.status !== "DITAHAN") return "";
+  const untilLabel = active ? formatWibDate(active.plannedEndDateMillis) : "-";
+  const endPkgLabel = c?.endDateMillis ? formatWibDate(c.endDateMillis) : "-";
+  const extText = active && active.extensionDays ? ` (+${active.extensionDays} hari)` : "";
+  return `
+    <div class="hold-banner" role="status">
+      <strong>Paket Kamu Sedang Ditahan (Hold)</strong>
+      <div>Paket kamu sedang ditahan sampai <b>${escapeHtml(untilLabel)}</b>, masa paket diperpanjang menjadi <b>${escapeHtml(endPkgLabel)}</b>${escapeHtml(extText)}.</div>
+      ${active ? `<div class="muted" style="color:inherit;opacity:0.9;margin-top:4px;">Alasan: ${escapeHtml(HOLD_REASON_LABELS[active.reasonCategory] || active.reasonCategory)}${active.notes ? " • " + escapeHtml(active.notes) : ""}</div>` : ""}
+    </div>
+  `;
+}
+
+function getHoldPolicy() {
+  const r = state.packageRule || {};
+  return {
+    minDays: typeof r.holdMinDays === "number" ? r.holdMinDays : 7,
+    maxDaysPerPeriod: typeof r.holdMaxDaysPerPeriod === "number" ? r.holdMaxDaysPerPeriod : 30,
+    maxCountPerPeriod: typeof r.holdMaxCountPerPeriod === "number" ? r.holdMaxCountPerPeriod : 2,
+    plannedNoticeHours: typeof r.holdPlannedNoticeHours === "number" ? r.holdPlannedNoticeHours : 24,
+    emergencyMaxAfterMissedHours: typeof r.holdEmergencyMaxAfterMissedHours === "number" ? r.holdEmergencyMaxAfterMissedHours : 48,
+    emergencyMaxBackdateDays: typeof r.holdEmergencyMaxBackdateDays === "number" ? r.holdEmergencyMaxBackdateDays : 7,
+    termsText: typeof r.holdTermsText === "string" && r.holdTermsText.trim() ? r.holdTermsText.trim() : DEFAULT_HOLD_TERMS_TEXT
+  };
+}
+
+function computeHoldQuotaUsage() {
+  const c = state.clientDoc;
+  const pol = getHoldPolicy();
+  const periodStart = c?.startDateMillis ? wibDateStartMillis(toWibDayKey(c.startDateMillis)) : 0;
+  const counted = state.holds.filter((h) =>
+    !h.deletedAt &&
+    h.requestedBy === "CLIENT" &&
+    (h.status === "ACTIVE" || h.status === "COMPLETED") &&
+    Number(h.startDateMillis || 0) >= periodStart
+  );
+  const usedCount = counted.length;
+  const usedDays = counted.reduce((sum, h) => sum + Math.max(0, Number(h.extensionDays) || 0), 0);
+  return {
+    usedCount,
+    usedDays,
+    remainingCount: Math.max(0, pol.maxCountPerPeriod - usedCount),
+    remainingDays: Math.max(0, pol.maxDaysPerPeriod - usedDays)
+  };
+}
+
+function validateClientHoldInput(reasonCategory, startStr, endStr) {
+  const c = state.clientDoc;
+  const pol = getHoldPolicy();
+  const quota = computeHoldQuotaUsage();
+  const startMillis = wibDateStartMillis(startStr);
+  const endMillis = wibDateStartMillis(endStr);
+  const plannedDays = computeHoldInclusiveDays(startMillis, endMillis);
+  const violations = [];
+  const now = Date.now();
+  const todayKey = toWibDayKey(now);
+  const todayStart = wibDateStartMillis(todayKey);
+
+  if (!c) violations.push("Profil klien belum dimuat.");
+  if (c && c.status === "SELESAI") violations.push("Paket sudah selesai (Alumni).");
+  if (getActiveHold()) violations.push("Paket Anda sedang Ditahan (Hold aktif).");
+  if (getPendingHold()) violations.push("Anda masih memiliki pengajuan hold yang menunggu persetujuan Coach.");
+  if (Number.isNaN(startMillis) || Number.isNaN(endMillis)) {
+    violations.push("Tanggal mulai dan tanggal selesai hold wajib diisi.");
+  } else if (endMillis < startMillis) {
+    violations.push("Tanggal selesai hold tidak boleh sebelum tanggal mulai.");
+  }
+
+  if (plannedDays > 0 && plannedDays < pol.minDays) {
+    violations.push(`Durasi hold minimal ${pol.minDays} hari (dipilih ${plannedDays} hari).`);
+  }
+  if (quota.usedCount + 1 > pol.maxCountPerPeriod) {
+    violations.push(`Jatah frekuensi hold periode ini sudah habis (${quota.usedCount}/${pol.maxCountPerPeriod}x).`);
+  }
+  if (quota.usedDays + plannedDays > pol.maxDaysPerPeriod) {
+    violations.push(`Total hari hold (${quota.usedDays} + ${plannedDays} = ${quota.usedDays + plannedDays} hari) melebihi batas maksimal ${pol.maxDaysPerPeriod} hari per periode.`);
+  }
+
+  if (!Number.isNaN(startMillis) && !Number.isNaN(endMillis) && endMillis >= startMillis) {
+    const isEmergency = reasonCategory === "SAKIT" || reasonCategory === "KECELAKAAN";
+    const holdEndInclusive = endMillis + 86_400_000 - 1;
+    if (isEmergency) {
+      const earliestKey = addDaysToWibKey(todayKey, -pol.emergencyMaxBackdateDays);
+      const earliestMillis = wibDateStartMillis(earliestKey);
+      if (startMillis < earliestMillis) {
+        violations.push(`Hold darurat berlaku mundur maksimal ${pol.emergencyMaxBackdateDays} hari (paling awal ${earliestKey}).`);
+      }
+      const missed = state.sessions
+        .filter((s) => (s.status === "TERJADWAL" || s.status === "TIDAK_HADIR") && s.startAtMillis >= startMillis && s.startAtMillis <= now)
+        .sort((a, b) => a.startAtMillis - b.startAtMillis)[0];
+      if (missed) {
+        const hoursSince = (now - missed.startAtMillis) / 3_600_000;
+        if (hoursSince > pol.emergencyMaxAfterMissedHours) {
+          violations.push(`Hold darurat maksimal dilaporkan ${pol.emergencyMaxAfterMissedHours} jam setelah sesi pertama yang terlewat (${formatWibDate(missed.startAtMillis)} ${formatWibTime(missed.startAtMillis)}).`);
+        }
+      }
+    } else {
+      if (startMillis < todayStart) {
+        violations.push(`Hold terencana tidak dapat berlaku mundur (minimal mulai ${todayKey}).`);
+      }
+      const nextUpcoming = state.sessions
+        .filter((s) => s.status === "TERJADWAL" && s.startAtMillis >= now && s.startAtMillis <= holdEndInclusive)
+        .sort((a, b) => a.startAtMillis - b.startAtMillis)[0];
+      if (nextUpcoming) {
+        const noticeHours = (nextUpcoming.startAtMillis - now) / 3_600_000;
+        if (noticeHours < pol.plannedNoticeHours) {
+          violations.push(`Pengajuan terencana minimal ${pol.plannedNoticeHours} jam sebelum sesi berikutnya (${formatWibDate(nextUpcoming.startAtMillis)} ${formatWibTime(nextUpcoming.startAtMillis)}).`);
+        }
+      }
+    }
+  }
+
+  return {
+    isValid: violations.length === 0,
+    plannedDays,
+    startMillis,
+    endMillis,
+    quota,
+    violations
+  };
+}
+
 function clearSubscriptions() {
   state.unsubscribers.forEach((u) => {
     try { u(); } catch (_) {}
@@ -410,6 +585,7 @@ function switchMenu(menu) {
   const titles = {
     profile: "Data Diri",
     schedule: "Jadwal",
+    hold: "Ajukan Hold",
     progress: "Progress Statistik",
     photos: "Foto Progres",
     workout: "Gerakan Olahraga"
@@ -449,6 +625,7 @@ function getFacility() {
 function renderAll() {
   renderProfileSection();
   renderScheduleSection();
+  renderHoldSection();
   renderProgressSection();
   renderPhotosSection();
   renderWorkoutSection();
@@ -507,6 +684,7 @@ function renderProfileSection() {
   }
 
   container.innerHTML = `
+    ${buildActiveHoldBannerHtml()}
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
         <div>
@@ -517,7 +695,7 @@ function renderProfileSection() {
       </div>
       <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;" />
       <div class="grid-cards">
-        <div><strong>Status</strong><div class="muted">${escapeHtml(statusLabel)}</div></div>
+        <div><strong>Status</strong><div><span class="badge badge-${c.status || "AKTIF"}">${escapeHtml(statusLabel)}</span></div></div>
         <div><strong>Periode Coaching</strong><div class="muted">${formatWibDate(c.startDateMillis)} — ${formatWibDate(c.endDateMillis)}</div></div>
         <div><strong>Pertemuan Terpakai</strong><div class="muted">${attendedCount} / ${quota} sesi</div></div>
         <div><strong>Tujuan</strong><div class="muted">${escapeHtml(c.goal || "-")}</div></div>
@@ -596,6 +774,7 @@ function renderScheduleSection() {
     `).join("");
 
   container.innerHTML = `
+    ${buildActiveHoldBannerHtml()}
     <div class="card">
       <div class="calendar-head">
         <button type="button" id="cal-prev" class="btn btn-outline btn-sm" aria-label="Bulan sebelumnya">&larr;</button>
@@ -617,6 +796,7 @@ function renderScheduleSection() {
             <strong>${escapeHtml(s.title || "Sesi Latihan")}</strong>
             <div class="muted">${formatWibDate(s.startAtMillis)} • ${formatWibTime(s.startAtMillis)} - ${formatWibTime(s.endAtMillis)}</div>
             <div class="muted">Lokasi: ${escapeHtml(s.location || "IHC Studio")}</div>
+            ${s.status === "DITAHAN" && s.needsReschedule ? `<div class="muted" style="color:var(--amber);">Perlu dijadwalkan ulang oleh Coach setelah masa hold selesai.</div>` : ""}
           </div>
           <div class="list-item-actions">
             <span class="badge badge-${s.status}">${SESSION_STATUS_LABELS[s.status] || s.status}</span>
@@ -654,6 +834,192 @@ function renderScheduleSection() {
       const session = state.sessions.find((x) => x.id === sid);
       if (session) openRescheduleModal(session);
     });
+  });
+}
+
+function renderHoldSection() {
+  const container = el("section-hold");
+  if (!container) return;
+  const c = state.clientDoc;
+  if (!c) {
+    container.innerHTML = `<div class="card"><p class="muted">Data klien belum dimuat.</p></div>`;
+    return;
+  }
+  const pol = getHoldPolicy();
+  const quota = computeHoldQuotaUsage();
+  const activeHold = getActiveHold();
+  const pendingHold = getPendingHold();
+  const canRequest = c.status === "AKTIF" && !activeHold && !pendingHold;
+
+  const todayKey = toWibDayKey(Date.now());
+  const defaultEndKey = addDaysToWibKey(todayKey, Math.max(1, pol.minDays) - 1);
+
+  const prevReason = el("hold-reason")?.value || "HALANGAN_PRIBADI";
+  const prevStart = el("hold-start")?.value || todayKey;
+  const prevEnd = el("hold-end")?.value || defaultEndKey;
+  const prevNotes = el("hold-notes")?.value || "";
+
+  const sortedHolds = state.holds.slice().sort((a, b) => Number(b.createdAt || b.startDateMillis || 0) - Number(a.createdAt || a.startDateMillis || 0));
+  const historyHtml = sortedHolds.length === 0
+    ? `<p class="muted">Belum ada riwayat pengajuan hold.</p>`
+    : sortedHolds.map((h) => {
+        const endDisp = h.actualEndDateMillis || h.plannedEndDateMillis;
+        const daysCount = h.extensionDays > 0 ? h.extensionDays : computeHoldInclusiveDays(h.startDateMillis, endDisp);
+        return `
+          <div class="list-item-row">
+            <div style="flex:1;min-width:220px;">
+              <strong>${escapeHtml(HOLD_REASON_LABELS[h.reasonCategory] || h.reasonCategory)} (${h.requestedBy === "COACH" ? "Oleh Coach" : "Pengajuan Klien"})</strong>
+              <div class="muted">${formatWibDate(h.startDateMillis)} — ${formatWibDate(endDisp)} (${daysCount} hari)</div>
+              ${h.extensionDays > 0 ? `<div class="muted" style="color:var(--emerald);">Perpanjangan masa paket: +${h.extensionDays} hari</div>` : ""}
+              ${h.notes ? `<div class="muted">Catatan: ${escapeHtml(h.notes)}</div>` : ""}
+              ${h.decisionNote ? `<div class="muted">Catatan Coach: ${escapeHtml(h.decisionNote)}</div>` : ""}
+            </div>
+            <span class="badge badge-${h.status}">${HOLD_STATUS_LABELS[h.status] || h.status}</span>
+          </div>
+        `;
+      }).join("");
+
+  let blockedNote = "";
+  if (activeHold) {
+    blockedNote = `<div class="alert alert-warn">Saat ini paket Anda sedang Ditahan sampai ${formatWibDate(activeHold.plannedEndDateMillis)}.</div>`;
+  } else if (pendingHold) {
+    blockedNote = `<div class="alert alert-warn">Pengajuan hold tanggal ${formatWibDate(pendingHold.startDateMillis)} — ${formatWibDate(pendingHold.plannedEndDateMillis)} sedang menunggu persetujuan Coach.</div>`;
+  } else if (c.status === "SELESAI") {
+    blockedNote = `<div class="alert alert-warn">Paket coaching Anda sudah selesai (Alumni).</div>`;
+  }
+
+  container.innerHTML = `
+    ${buildActiveHoldBannerHtml()}
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <h3 style="margin:0;">Sisa Kuota Hold Periode Ini</h3>
+        <span class="badge badge-${c.packageTier}">${escapeHtml(c.packageTier)}</span>
+      </div>
+      <div class="grid-cards">
+        <div><strong>Sisa Frekuensi</strong><div class="muted">${quota.remainingCount} dari ${pol.maxCountPerPeriod}x</div></div>
+        <div><strong>Sisa Hari Hold</strong><div class="muted">${quota.remainingDays} dari ${pol.maxDaysPerPeriod} hari</div></div>
+        <div><strong>Minimal Durasi</strong><div class="muted">${pol.minDays} hari per hold</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Ketentuan Hold Paket</h3>
+      <p class="muted" style="white-space:pre-line;margin-bottom:0;">${escapeHtml(pol.termsText)}</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Ajukan Hold / Pause Paket</h3>
+      ${blockedNote}
+      <form id="hold-req-form" class="auth-form">
+        <label>
+          Kategori Alasan
+          <select id="hold-reason" ${canRequest ? "" : "disabled"}>
+            <option value="HALANGAN_PRIBADI">Halangan Pribadi</option>
+            <option value="PERJALANAN_DINAS">Perjalanan / Dinas</option>
+            <option value="SAKIT">Sakit (Darurat — bisa mundur)</option>
+            <option value="KECELAKAAN">Kecelakaan (Darurat — bisa mundur)</option>
+            <option value="LAINNYA">Lainnya</option>
+          </select>
+        </label>
+        <div class="grid-cards">
+          <label>
+            Tanggal Mulai (WIB)
+            <input type="date" id="hold-start" required value="${escapeHtml(prevStart)}" ${canRequest ? "" : "disabled"} />
+          </label>
+          <label>
+            Tanggal Selesai (WIB)
+            <input type="date" id="hold-end" required value="${escapeHtml(prevEnd)}" ${canRequest ? "" : "disabled"} />
+          </label>
+        </div>
+        <label>
+          Catatan Tambahan (Opsional)
+          <textarea id="hold-notes" rows="2" maxlength="1000" placeholder="Jelaskan alasan singkat Anda…" ${canRequest ? "" : "disabled"}>${escapeHtml(prevNotes)}</textarea>
+        </label>
+        <div id="hold-validation-preview" class="hold-validation-box ok"></div>
+        <button type="submit" id="hold-submit-btn" class="btn btn-primary full-width" ${canRequest ? "" : "disabled"}>Kirim Pengajuan Hold ke Coach</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">Riwayat Hold Paket</h3>
+      ${historyHtml}
+    </div>
+  `;
+
+  const reasonEl = el("hold-reason");
+  if (reasonEl) reasonEl.value = prevReason;
+
+  const refreshHoldPreview = () => {
+    const previewEl = el("hold-validation-preview");
+    const submitBtn = el("hold-submit-btn");
+    if (!previewEl || !submitBtn) return;
+    const res = validateClientHoldInput(
+      el("hold-reason")?.value || "HALANGAN_PRIBADI",
+      el("hold-start")?.value || "",
+      el("hold-end")?.value || ""
+    );
+    if (res.isValid) {
+      previewEl.className = "hold-validation-box ok";
+      previewEl.innerHTML = `Durasi dipilih: <strong>${res.plannedDays} hari</strong> (sesuai aturan hold).`;
+      submitBtn.disabled = false;
+    } else {
+      previewEl.className = "hold-validation-box err";
+      previewEl.innerHTML = `<strong>Durasi: ${res.plannedDays} hari</strong><ul style="margin:4px 0 0;padding-left:18px;">${res.violations.map((v) => `<li>${escapeHtml(v)}</li>`).join("")}</ul>`;
+      submitBtn.disabled = true;
+    }
+  };
+
+  refreshHoldPreview();
+  el("hold-reason")?.addEventListener("change", refreshHoldPreview);
+  el("hold-start")?.addEventListener("change", refreshHoldPreview);
+  el("hold-end")?.addEventListener("change", refreshHoldPreview);
+
+  el("hold-req-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.clientDoc || !state.db || !state.auth?.currentUser) return;
+    const reasonCategory = el("hold-reason")?.value || "HALANGAN_PRIBADI";
+    const startStr = el("hold-start")?.value || "";
+    const endStr = el("hold-end")?.value || "";
+    const notes = (el("hold-notes")?.value || "").trim();
+    const check = validateClientHoldInput(reasonCategory, startStr, endStr);
+    if (!check.isValid) {
+      showToast(check.violations[0] || "Pengajuan hold belum memenuhi syarat.", "error");
+      return;
+    }
+    showLoading("Mengirim pengajuan hold ke Coach…");
+    try {
+      await addDoc(collection(state.db, "holds"), {
+        coachUid: state.clientDoc.coachUid,
+        clientId: state.clientDoc.id,
+        clientEmail: state.clientDoc.emailNormalized,
+        clientName: state.clientDoc.fullName || "",
+        requestedBy: "CLIENT",
+        reasonCategory,
+        notes,
+        startDateMillis: Math.trunc(check.startMillis),
+        plannedEndDateMillis: Math.trunc(check.endMillis),
+        actualEndDateMillis: null,
+        status: "REQUESTED",
+        extensionDays: 0,
+        ruleOverride: false,
+        overrideNote: "",
+        decisionNote: "",
+        actorUid: state.auth.currentUser.uid,
+        actorEmail: state.clientDoc.emailNormalized,
+        approvedAtMillis: null,
+        resumedAtMillis: null,
+        affectedSessionIdsCsv: "",
+        deletedAt: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      if (el("hold-notes")) el("hold-notes").value = "";
+      showToast("Pengajuan hold berhasil dikirim ke Coach Iyan.", "success");
+    } catch (err) {
+      showToast(mapFirebaseError(err, "Gagal mengirim pengajuan hold."), "error");
+    } finally {
+      hideLoading();
+    }
   });
 }
 
@@ -1013,6 +1379,7 @@ function attachClientListeners(emailLower) {
   };
 
   bindCol("sessions", "sessions", () => syncNearestSlotSummarySubscription());
+  bindCol("holds", "holds");
   bindCol("rescheduleRequests", "rescheduleRequests");
   bindCol("measurements", "measurements");
   bindCol("bodyCompositions", "bodyCompositions");

@@ -204,6 +204,7 @@
         <nav class="nav-list" aria-label="Menu Portal Klien">
           <button type="button" class="nav-item active" data-menu="profile">Data Diri</button>
           <button type="button" class="nav-item" data-menu="schedule">Jadwal</button>
+          <button type="button" class="nav-item" data-menu="hold">Ajukan Hold</button>
           <button type="button" class="nav-item" data-menu="progress">Progress Statistik</button>
           <button type="button" class="nav-item" data-menu="photos">Foto Progres</button>
           <button type="button" class="nav-item" data-menu="workout">Gerakan Olahraga</button>
@@ -244,13 +245,16 @@
         <!-- 2. Jadwal -->
         <section id="section-schedule" class="menu-section hidden"></section>
 
-        <!-- 3. Progress Statistik -->
+        <!-- 3. Ajukan Hold -->
+        <section id="section-hold" class="menu-section hidden"></section>
+
+        <!-- 4. Progress Statistik -->
         <section id="section-progress" class="menu-section hidden"></section>
 
-        <!-- 4. Foto Progres -->
+        <!-- 5. Foto Progres -->
         <section id="section-photos" class="menu-section hidden"></section>
 
-        <!-- 5. Gerakan Olahraga -->
+        <!-- 6. Gerakan Olahraga -->
         <section id="section-workout" class="menu-section hidden"></section>
       </main>
 
@@ -263,6 +267,10 @@
         <button type="button" class="bottom-item" data-menu="schedule">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7Zm12 7H5v10h14V9Z"/></svg>
           <span>Jadwal</span>
+        </button>
+        <button type="button" class="bottom-item" data-menu="hold">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14H9V8h2v8Zm4 0h-2V8h2v8Z"/></svg>
+          <span>Hold</span>
         </button>
         <button type="button" class="bottom-item" data-menu="progress">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16v2H2V3h2v16Zm3-4 4-4 3 3 5-6 1.5 1.3-6.4 7.7-3.1-3.1-2.6 2.6L7 15Z"/></svg>
